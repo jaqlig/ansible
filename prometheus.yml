@@ -1,0 +1,61 @@
+---
+- name: Setup Prometheus
+  hosts: pi
+  remote_user: pi
+
+  tasks:
+  - name: Create config directory
+    ansible.builtin.file:
+      path: /configs/prometheus
+      state: directory
+      owner: pi
+      group: pi
+      mode: '0755'
+
+  - name: Copy config
+    ansible.builtin.template:
+      src: prometheus.yml.j2
+      dest: /configs/prometheus/prometheus.yml
+      owner: pi
+      group: pi
+      mode: '0644'
+
+  - name: Start Node exporter container
+    community.docker.docker_container:
+      name: exporter
+      image: prom/node-exporter:latest
+      ports:
+        - 9100:9100
+
+  - name: Create Prometheus volume
+    community.docker.docker_volume:
+      name: prometheus
+
+  - name: Start Prometheus container
+    community.docker.docker_container:
+      name: prometheus
+      image: prom/prometheus:latest
+      recreate: true
+      links:
+        - "exporter:exporter"
+      ports:
+        - 9090:9090
+      volumes:
+        - /configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+        - prometheus:/prometheus
+
+  - name: Create Grafana volume
+    docker_volume:
+      name: grafana
+
+  - name: Start Grafana container
+    community.docker.docker_container:
+      name: grafana
+      image: grafana/grafana:latest
+      recreate: true
+      links:
+        - "prometheus:prometheus"
+      ports:
+        - 3000:3000
+      volumes:
+        - grafana:/var/lib/grafana
